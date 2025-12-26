@@ -1,6 +1,6 @@
 # Inference Server Manager
 
-A Bun-native HTTP service that manages a pool of WhisperServer workers for audio transcription. Powers the **voice.audetic.link** API.
+A Bun-native HTTP service that manages a pool of [WhisperServer](https://github.com/matsilva/whisper/tree/feat/server-builds) workers for audio transcription. Powers the **voice.audetic.link** API.
 
 ## Features
 
