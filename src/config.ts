@@ -37,41 +37,45 @@ export const defaultConfig: InferenceServerConfig = {
 	},
 };
 
-export async function load(): Promise<InferenceServerConfig> {
+async function loadConfig(): Promise<InferenceServerConfig> {
 	const path = join(Global.Path.config, "settings.json5");
 	const file = Bun.file(path);
-	Log.info({ file: path }, "Loading config");
 	const exists = await file.exists();
+
 	if (!exists) {
-		Log.warn("Config file not found, creating default");
+		Log.debug({ path }, "Config file not found, creating default");
 		await Bun.file(path).write(JSON5.stringify(defaultConfig, null, 2));
 		return defaultConfig;
 	}
 
 	try {
 		const contents = JSON5.parse(await file.text());
-		Log.info({ contents }, "Loaded config");
 		return merge({}, defaultConfig, contents);
 	} catch (error) {
-		Log.warn(error, "An unexpected error occurred while loading config");
+		Log.warn({ error, path }, "Failed to parse config, using defaults");
 		return defaultConfig;
 	}
 }
 
-const _config = await load();
+// Load config once at module import
+const _config = await loadConfig();
 
 export namespace Config {
 	export const config = _config;
 
+	/**
+	 * @deprecated Config is loaded automatically at module import.
+	 * This function is kept for backward compatibility but does nothing.
+	 */
 	export async function init() {
-		await load();
+		// No-op: config is loaded at module import time
 	}
 
-	export const getConfigPath = () => {
+	export function getConfigPath(): string {
 		return join(Global.Path.config, "settings.json5");
-	};
+	}
 
-	export async function open() {
+	export function open(): void {
 		const configPath = Config.getConfigPath();
 		const editor = _config.editor ?? process.env.EDITOR ?? "xdg-open";
 		Bun.spawn([editor, configPath], {

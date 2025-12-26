@@ -52,8 +52,29 @@ bun run start
 | `WHISPER_SERVER_CMD`         | Path to whisper server executable    | Required                |
 | `WHISPER_SERVER_CWD`         | Working directory for whisper server | Current dir             |
 | `CORS_ORIGIN`                | Allowed CORS origin                  | `http://localhost:5173` |
-| `LOG_LEVEL`                  | Pino log level                       | `info`                  |
+| `LOG_LEVEL`                  | Pino log level (see below)           | `info`                  |
 | `XDG_DIR_NAME`               | XDG directory name for data storage  | `transcription_manager` |
+
+## Logging
+
+### Log Levels
+
+| Level   | Description                                                              |
+| ------- | ------------------------------------------------------------------------ |
+| `error` | Critical failures only (worker spawn failures, max health check failures) |
+| `warn`  | Warnings (low worker count, worker health degradation)                   |
+| `info`  | Default. Manager lifecycle events (startup, shutdown, worker ready)       |
+| `debug` | Health check details, startup connection attempts, heartbeat metrics     |
+| `trace` | Reserved for future use                                                  |
+
+### Worker Logs
+
+Worker subprocess output (stdout/stderr from WhisperServer) is written to separate log files:
+```
+~/.local/share/transcription_manager/logs/workers/worker-{port}.log
+```
+
+This keeps the main console clean while preserving worker output for debugging.
 
 ## Configuration
 

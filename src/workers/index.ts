@@ -1,4 +1,5 @@
 import { Log } from "../observability/logger";
+import { WorkerLogger } from "../observability/worker-logger";
 
 export enum WorkerState {
 	Starting = "starting",
@@ -19,6 +20,12 @@ export interface Worker {
 	startedAt: number;
 	lastHealthyAt: number;
 }
+
+// Track worker loggers for cleanup
+const workerLoggers = new Map<
+	string,
+	ReturnType<typeof WorkerLogger.createStreamHandlers>
+>();
 
 export namespace Workers {
 	const log = Log.child({ module: "Workers" });
@@ -48,41 +55,32 @@ export namespace Workers {
 		const id = `worker_${port}_${Date.now()}_${workerCounter++}`;
 		const args = buildWorkerArgs(port, model, threads, extraArgs);
 
-		log.info({ args, cmd: serverCmd, id, port }, "Spawning whisper server");
+		log.info({ port, workerId: id }, "Spawning worker");
 
-		const logStdout = (line: string) => {
-			log.info({ line, workerId: id }, "whisper-worker stdout");
-		};
-
-		const logStderr = (line: string) => {
-			const normalized = line.toLowerCase();
-			const isError =
-				normalized.includes("error") ||
-				normalized.includes("fail") ||
-				normalized.includes("exception") ||
-				normalized.includes("panic");
-
-			if (isError) {
-				log.error({ line, workerId: id }, "whisper-worker stderr");
-			} else {
-				log.info({ line, workerId: id }, "whisper-worker stderr");
-			}
-		};
+		// Create per-worker log file handler
+		const workerLog = WorkerLogger.createStreamHandlers(port);
+		workerLoggers.set(id, workerLog);
 
 		try {
 			const proc = Bun.spawn([serverCmd, ...args], {
 				cwd: serverCwd,
 				onExit: (_proc, exitCode, signalCode) => {
 					log.info(
-						{ exitCode, signalCode, workerId: id },
-						"Worker process exited",
+						{ exitCode, port, signalCode, workerId: id },
+						"Worker exited",
 					);
+					// Cleanup the worker logger
+					const logger = workerLoggers.get(id);
+					if (logger) {
+						logger.cleanup();
+						workerLoggers.delete(id);
+					}
 				},
 				stderr: "pipe",
 				stdout: "pipe",
 			});
 
-			// Stream stdout/stderr
+			// Stream stdout to worker log file
 			(async () => {
 				try {
 					const reader = proc.stdout.getReader();
@@ -91,15 +89,18 @@ export namespace Workers {
 						const { done, value } = await reader.read();
 						if (done) break;
 						const text = decoder.decode(value);
-						text.split("\n").forEach((line) => {
-							if (line.trim()) logStdout(line);
-						});
+						for (const line of text.split("\n")) {
+							if (line.trim()) {
+								workerLog.stdout(line);
+							}
+						}
 					}
 				} catch (_e) {
 					// Stream closed
 				}
 			})();
 
+			// Stream stderr to worker log file
 			(async () => {
 				try {
 					const reader = proc.stderr.getReader();
@@ -108,9 +109,11 @@ export namespace Workers {
 						const { done, value } = await reader.read();
 						if (done) break;
 						const text = decoder.decode(value);
-						text.split("\n").forEach((line) => {
-							if (line.trim()) logStderr(line);
-						});
+						for (const line of text.split("\n")) {
+							if (line.trim()) {
+								workerLog.stderr(line);
+							}
+						}
 					}
 				} catch (_e) {
 					// Stream closed
@@ -132,7 +135,10 @@ export namespace Workers {
 
 			return worker;
 		} catch (error) {
-			log.error({ error, id, port }, "Failed to spawn worker");
+			log.error({ error, port, workerId: id }, "Failed to spawn worker");
+			// Cleanup logger on spawn failure
+			workerLog.cleanup();
+			workerLoggers.delete(id);
 			throw error;
 		}
 	}
@@ -149,13 +155,38 @@ export namespace Workers {
 				worker.process.kill();
 			}
 			worker.state = WorkerState.Stopped;
-			log.info({ workerId: worker.id }, "Terminated worker");
+			log.info({ port: worker.port, workerId: worker.id }, "Worker terminated");
+
+			// Cleanup the worker logger
+			const logger = workerLoggers.get(worker.id);
+			if (logger) {
+				logger.cleanup();
+				workerLoggers.delete(worker.id);
+			}
 		} catch (error) {
-			log.error({ error, workerId: worker.id }, "Failed to terminate worker");
+			log.error(
+				{ error, port: worker.port, workerId: worker.id },
+				"Failed to terminate worker",
+			);
 		}
 	}
 
 	export function isAlive(worker: Worker): boolean {
 		return worker.process.exitCode === null;
+	}
+
+	/**
+	 * Get the log file path for a worker
+	 */
+	export function getLogPath(port: number): string {
+		return WorkerLogger.getLogPath(port);
+	}
+
+	/**
+	 * Clean up all worker loggers
+	 */
+	export function disposeAllLoggers(): void {
+		WorkerLogger.disposeAll();
+		workerLoggers.clear();
 	}
 }

@@ -1,6 +1,5 @@
 import type { Elysia } from "elysia";
 import { createApp } from "./app";
-import { Config } from "./config";
 import { Observability } from "./observability";
 import { Log } from "./observability/logger";
 
@@ -72,10 +71,9 @@ namespace Main {
 	export const run = async () => {
 		registerShutdown();
 
-		await Config.init();
+		// Config is loaded at module import, no need to call init()
 
-		// Start observability session to track app usage
-		Log.info("Starting observability session");
+		// Start observability session (heartbeat pulse)
 		Observability.start();
 
 		// Initialize the inference server manager with worker pool
@@ -96,7 +94,8 @@ namespace Main {
 			app.listen({ port, hostname });
 
 			Log.info(
-				`Inference Server Manager is running at ${app.server?.hostname}:${app.server?.port}`,
+				{ hostname: app.server?.hostname, port: app.server?.port },
+				"Server started",
 			);
 
 			// Note: Cleanup is handled by signal handlers (SIGINT/SIGTERM)

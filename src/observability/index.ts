@@ -1,43 +1,52 @@
 import { Log } from "./logger";
-import { System } from "./system";
 
+/**
+ * Observability module for periodic health/status logging.
+ * Logs a simplified pulse every 24 hours with essential metrics only.
+ */
 export namespace Observability {
-	class Checker {
-		timer: NodeJS.Timer | undefined;
-		interval: number;
-		constructor(interval = 60_000 * 60 * 24) {
-			this.interval = interval;
-		}
-		start(metadata?: Record<string, unknown>) {
-			this.pulse(metadata ?? {});
-			this.timer = setInterval(() => {
-				this.pulse(metadata ?? {});
-			}, this.interval);
-		}
-		pulse(metadata: Record<string, unknown> | undefined) {
-			// throw away env
-			const { env, ...pCopy } = System.Process;
-			// throw away cpus
-			const { cpus, ...sCopy } = System.Info;
-			Log.info(
-				{
-					process: pCopy,
-					system: sCopy,
-					...metadata,
-				},
-				"pulse",
-			);
-		}
+	let timer: Timer | undefined;
 
-		stop() {
-			clearInterval(this.timer);
+	// Default interval: 24 hours
+	const PULSE_INTERVAL_MS = 60_000 * 60 * 24;
+
+	function formatBytes(bytes: number): string {
+		const mb = bytes / (1024 * 1024);
+		return `${mb.toFixed(1)}MB`;
+	}
+
+	function formatUptime(seconds: number): string {
+		const hours = Math.floor(seconds / 3600);
+		const minutes = Math.floor((seconds % 3600) / 60);
+		if (hours > 0) {
+			return `${hours}h ${minutes}m`;
 		}
+		return `${minutes}m`;
 	}
-	const checker = new Checker();
-	export function start() {
-		checker.start();
+
+	function pulse(): void {
+		const mem = process.memoryUsage();
+		Log.debug(
+			{
+				heapUsed: formatBytes(mem.heapUsed),
+				pid: process.pid,
+				rss: formatBytes(mem.rss),
+				uptime: formatUptime(process.uptime()),
+			},
+			"heartbeat",
+		);
 	}
-	export function dispose() {
-		checker.stop();
+
+	export function start(): void {
+		// Don't pulse immediately - wait for the interval
+		// This prevents flooding logs at startup
+		timer = setInterval(pulse, PULSE_INTERVAL_MS);
+	}
+
+	export function dispose(): void {
+		if (timer) {
+			clearInterval(timer);
+			timer = undefined;
+		}
 	}
 }

@@ -183,12 +183,13 @@ export namespace Manager {
 		const deadline = Date.now() + timeoutMs;
 
 		while (Date.now() < deadline) {
-			const healthy = await checkWorkerHealth(worker);
+			// Pass duringStartup=true to suppress expected connection errors
+			const healthy = await checkWorkerHealth(worker, true);
 			if (healthy) {
 				worker.state = WorkerState.Healthy;
 				worker.consecutiveFailures = 0;
 				worker.lastHealthyAt = Date.now();
-				log.info({ workerId: worker.id }, "Worker is healthy");
+				log.info({ port: worker.port, workerId: worker.id }, "Worker ready");
 				return true;
 			}
 			await new Promise((resolve) => setTimeout(resolve, 200));
@@ -197,7 +198,15 @@ export namespace Manager {
 		return false;
 	}
 
-	async function checkWorkerHealth(worker: Worker): Promise<boolean> {
+	/**
+	 * Check if a worker is healthy by calling its /health endpoint.
+	 * @param worker - The worker to check
+	 * @param duringStartup - If true, failures are expected and logged at DEBUG level
+	 */
+	async function checkWorkerHealth(
+		worker: Worker,
+		duringStartup = false,
+	): Promise<boolean> {
 		const url = `${worker.baseUrl}/health`;
 		try {
 			const controller = new AbortController();
@@ -213,39 +222,46 @@ export namespace Manager {
 				return true;
 			}
 
-			log.error(
+			// Non-OK status is unexpected even during startup
+			log.warn(
 				{
 					port: worker.port,
 					status: response.status,
-					url,
 					workerId: worker.id,
 				},
 				"Worker health check returned non-OK status",
 			);
 			return false;
-		} catch (error) {
-			const isTimeout = error instanceof Error && error.name === "AbortError";
-			log.error(
-				{
-					error,
-					errorMessage:
-						error instanceof Error ? error.message : "Unknown error",
-					isTimeout,
-					port: worker.port,
-					url,
-					workerId: worker.id,
-				},
-				"Worker health check failed",
-			);
+		} catch (_error) {
+			// During startup, connection refused is expected - use debug level
+			if (duringStartup) {
+				log.debug(
+					{ port: worker.port, workerId: worker.id },
+					"Worker not ready yet (expected during startup)",
+				);
+			} else {
+				// After startup, health check failures are warnings until max failures
+				log.debug(
+					{ port: worker.port, workerId: worker.id },
+					"Worker health check failed",
+				);
+			}
 			return false;
 		}
 	}
 
 	function healthSweep(): void {
 		for (const worker of workers.values()) {
-			checkWorkerHealth(worker)
+			checkWorkerHealth(worker, false)
 				.then((healthy) => {
 					if (healthy) {
+						// Worker recovered if it was previously failing
+						if (worker.consecutiveFailures > 0) {
+							log.info(
+								{ port: worker.port, workerId: worker.id },
+								"Worker recovered",
+							);
+						}
 						worker.consecutiveFailures = 0;
 						worker.lastHealthyAt = Date.now();
 						if (worker.state !== WorkerState.Healthy) {
@@ -253,22 +269,35 @@ export namespace Manager {
 						}
 					} else {
 						worker.consecutiveFailures++;
-						log.error(
-							{ failures: worker.consecutiveFailures, workerId: worker.id },
-							"Worker health check failed",
-						);
 
+						// Only log warning/error when approaching or exceeding max failures
 						if (worker.consecutiveFailures >= HEALTH_MAX_FAILURES) {
 							log.error(
-								{ workerId: worker.id },
-								"Worker exceeded max failures, replacing",
+								{
+									failures: worker.consecutiveFailures,
+									port: worker.port,
+									workerId: worker.id,
+								},
+								"Worker unhealthy, replacing",
 							);
 							replaceWorker(worker);
+						} else if (worker.consecutiveFailures >= HEALTH_MAX_FAILURES - 1) {
+							log.warn(
+								{
+									failures: worker.consecutiveFailures,
+									port: worker.port,
+									workerId: worker.id,
+								},
+								"Worker failing health checks",
+							);
 						}
 					}
 				})
 				.catch((error) => {
-					log.error({ error, workerId: worker.id }, "Health check error");
+					log.error(
+						{ error, port: worker.port, workerId: worker.id },
+						"Health check error",
+					);
 				});
 		}
 	}
