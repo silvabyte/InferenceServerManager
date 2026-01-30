@@ -37,9 +37,7 @@ const db = drizzle(testDb, { schema });
 const { DB } = await import("../../db");
 
 // Override DB.get to return our test database
-// @ts-expect-error - Mocking internal function
 DB.get = () => db;
-// @ts-expect-error - Mocking internal function
 DB.init = () => db;
 
 describe("JobStore", () => {
