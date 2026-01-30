@@ -21,8 +21,10 @@ export namespace Global {
 		cache,
 		config,
 		data,
+		database: path.join(data, "jobs.db"),
 		logs: path.join(data, "logs"),
 		state,
+		uploads: path.join(data, "uploads"),
 	} as const;
 }
 
@@ -33,6 +35,7 @@ await Promise.all([
 	fs.mkdir(Global.Path.logs, { recursive: true }),
 	fs.mkdir(Global.Path.audio, { recursive: true }),
 	fs.mkdir(Global.Path.bin, { recursive: true }),
+	fs.mkdir(Global.Path.uploads, { recursive: true }),
 ]);
 
 const CACHE_VERSION = "9";

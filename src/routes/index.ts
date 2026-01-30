@@ -2,6 +2,7 @@ import type { Elysia } from "elysia";
 import { t } from "elysia";
 import { Manager } from "../manager";
 import { Log } from "../observability/logger";
+import { registerJobRoutes } from "./jobs";
 
 const log = Log.child({ module: "routes" });
 
@@ -123,7 +124,7 @@ export function registerRoutes(app: Elysia): void {
 						{
 							available: poolStatus.healthyWorkers > 0,
 							capabilities: {
-								batch: false,
+								batch: true, // Supports batch via job queue
 								diarization: false,
 								languages: [
 									"en",
@@ -138,9 +139,21 @@ export function registerRoutes(app: Elysia): void {
 									"ja",
 								],
 								maxDuration: null,
-								maxFileSize: null,
+								maxFileSize: 10 * 1024 * 1024 * 1024, // 10 GB
 								streaming: false,
-								supportedFormats: ["wav", "mp3", "m4a", "flac", "ogg", "opus"],
+								supportedFormats: [
+									"wav",
+									"mp3",
+									"m4a",
+									"flac",
+									"ogg",
+									"opus",
+									"mp4",
+									"mkv",
+									"webm",
+									"avi",
+									"mov",
+								],
 								wordTimestamps: true,
 							},
 							costPerMinute: 0.0,
@@ -225,4 +238,7 @@ export function registerRoutes(app: Elysia): void {
 				},
 			},
 		);
+
+	// Register job routes
+	registerJobRoutes(app);
 }

@@ -9,6 +9,10 @@ A Bun-native HTTP service that manages a pool of [WhisperServer](https://github.
 - **Health Monitoring**: Automatic health checks every 5 seconds
 - **Auto-Recovery**: Respawns failed workers with exponential backoff
 - **Worker Recycling**: Rotates workers after configurable request threshold
+- **Long-Running Jobs**: SQLite-backed job queue for large files (up to 10 GB)
+- **Video Support**: Automatic audio extraction from video files (MP4, MKV, WebM, AVI, MOV)
+- **Job Status Polling**: Track transcription progress for long-running files
+- **Automatic Cleanup**: Removes old job files after configurable retention period
 - **OpenAPI Documentation**: Auto-generated API docs at `/openapi`
 
 ## Architecture
@@ -27,6 +31,22 @@ A Bun-native HTTP service that manages a pool of [WhisperServer](https://github.
 │                                                             │
 │  Health Checks (5s) │ Audit Sweep (30s) │ Auto-Rotation    │
 └─────────────────────────────────────────────────────────────┘
+```
+
+### Long-Running Jobs Architecture
+
+For large files (video and long audio), jobs are processed asynchronously:
+
+```
+Client (multipart) → Elysia API → Save File → Job Queue (SQLite)
+                                                    ↓
+                                         Job Processor (background)
+                                                    ↓
+                                         FFmpeg (extract audio from video)
+                                                    ↓
+                                         Whisper Workers → Store Result
+                                                    ↓
+Client ← Poll Status ← Job API
 ```
 
 ## Quick Start
@@ -93,6 +113,15 @@ Config file location: `~/.config/transcription_manager/settings.json5` (or custo
     cmd: "/path/to/whisper-server",
     cwd: "/path/to/whisper-project",
   },
+  // Job queue configuration
+  jobs: {
+    maxFileSizeMb: 10240,  // 10 GB max file size
+    supportedVideoFormats: ["mp4", "mkv", "webm", "avi", "mov"],
+    supportedAudioFormats: ["wav", "mp3", "m4a", "flac", "ogg", "opus"],
+    retentionHours: 24,     // Delete completed jobs after 24 hours
+    processorIntervalMs: 1000,
+    maxConcurrentJobs: 2,
+  },
   // Editor for config editing
   editor: "nvim",
 }
@@ -138,6 +167,83 @@ GET /api/v1/status
 
 Returns detailed status of all workers in the pool.
 
+### Submit Long-Running Job (Async)
+
+For large files or video files, use the job submission API:
+
+```bash
+curl -X POST http://localhost:3141/api/v1/jobs \
+  -F "file=@video.mp4" \
+  -F "language=en" \
+  -F "timestamps=true"
+```
+
+Response (202 Accepted):
+```json
+{
+  "success": true,
+  "jobId": "abc123xyz",
+  "status": "pending",
+  "message": "Job submitted successfully"
+}
+```
+
+### Poll Job Status
+
+```
+GET /api/v1/jobs/:id/status
+```
+
+Response:
+```json
+{
+  "success": true,
+  "jobId": "abc123xyz",
+  "status": "transcribing",
+  "progress": 50,
+  "progressMessage": "Transcribing audio..."
+}
+```
+
+### Get Job Result
+
+```
+GET /api/v1/jobs/:id
+```
+
+Returns full job details including transcription result when completed.
+
+### Cancel Job
+
+```
+DELETE /api/v1/jobs/:id
+```
+
+Cancels a pending job. Returns error if job is already in progress.
+
+### List Jobs
+
+```
+GET /api/v1/jobs?status=pending,completed&limit=20&offset=0
+```
+
+Returns paginated list of jobs with optional status filter.
+
+## System Requirements
+
+For video file processing, FFmpeg must be installed on the system:
+
+```bash
+# Ubuntu/Debian
+sudo apt install ffmpeg
+
+# macOS
+brew install ffmpeg
+
+# Arch Linux
+sudo pacman -S ffmpeg
+```
+
 ## Deployment
 
 This service powers `voice.audetic.link`. For deployment:
@@ -145,13 +251,17 @@ This service powers `voice.audetic.link`. For deployment:
 1. Ensure `WHISPER_SERVER_CMD` points to a valid whisper server binary
 2. Set `CORS_ORIGIN` to your frontend domain
 3. Configure worker pool size based on available resources
-4. Use a process manager (systemd, pm2) for production
+4. Install FFmpeg for video file support
+5. Use a process manager (systemd, pm2) for production
 
 ## Development
 
 ```bash
 # Type check
 bun run typecheck
+
+# Run tests
+bun test
 
 # Format
 bun run fmt

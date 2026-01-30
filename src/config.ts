@@ -16,10 +16,24 @@ export const WhisperServer = t.Object({
 	cwd: t.String({ default: Bun.env.WHISPER_SERVER_CWD ?? "" }),
 });
 
+export const JobsConfig = t.Object({
+	maxFileSizeMb: t.Integer({ default: 10240 }), // 10 GB
+	supportedVideoFormats: t.Array(t.String(), {
+		default: ["mp4", "mkv", "webm", "avi", "mov"],
+	}),
+	supportedAudioFormats: t.Array(t.String(), {
+		default: ["wav", "mp3", "m4a", "flac", "ogg", "opus"],
+	}),
+	retentionHours: t.Integer({ default: 24 }),
+	processorIntervalMs: t.Integer({ default: 1000 }),
+	maxConcurrentJobs: t.Integer({ default: 2 }),
+});
+
 export const InferenceServerConfig = t.Object({
 	editor: t.String(),
 	whisperServer: WhisperServer,
 	workers: WorkerConfig,
+	jobs: JobsConfig,
 });
 
 export type InferenceServerConfig = Static<typeof InferenceServerConfig>;
@@ -34,6 +48,14 @@ export const defaultConfig: InferenceServerConfig = {
 		poolSize: 3,
 		rotateThreshold: 25,
 		startingPort: 39000,
+	},
+	jobs: {
+		maxFileSizeMb: 10240, // 10 GB
+		supportedVideoFormats: ["mp4", "mkv", "webm", "avi", "mov"],
+		supportedAudioFormats: ["wav", "mp3", "m4a", "flac", "ogg", "opus"],
+		retentionHours: 24,
+		processorIntervalMs: 1000,
+		maxConcurrentJobs: 2,
 	},
 };
 

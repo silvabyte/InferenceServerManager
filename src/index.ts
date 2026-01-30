@@ -1,5 +1,8 @@
 import type { Elysia } from "elysia";
 import { createApp } from "./app";
+import { Config } from "./config";
+import { DB } from "./db";
+import { Cleanup, JobProcessor } from "./jobs";
 import { Observability } from "./observability";
 import { Log } from "./observability/logger";
 
@@ -25,11 +28,26 @@ const cleanup = async () => {
 
 	Log.info("Shutting down Inference Server Manager...");
 
+	// Stop job processor
+	WithTry(async () => {
+		JobProcessor.stop();
+	}, "Failed to stop job processor");
+
+	// Stop cleanup task
+	WithTry(async () => {
+		Cleanup.stop();
+	}, "Failed to stop cleanup task");
+
 	// Dispose manager and workers
 	WithTry(async () => {
 		const { Manager } = await import("./manager");
 		await Manager.dispose();
 	}, "Failed to dispose manager");
+
+	// Close database connection
+	WithTry(async () => {
+		DB.close();
+	}, "Failed to close database");
 
 	// End observability session
 	WithTry(
@@ -76,9 +94,19 @@ namespace Main {
 		// Start observability session (heartbeat pulse)
 		Observability.start();
 
+		// Initialize the database
+		DB.init();
+
 		// Initialize the inference server manager with worker pool
 		const { Manager } = await import("./manager");
 		await Manager.init();
+
+		// Start job processor
+		JobProcessor.start();
+
+		// Start cleanup task
+		const retentionHours = Config.config.jobs?.retentionHours ?? 24;
+		Cleanup.start(retentionHours);
 
 		try {
 			app = createApp();
