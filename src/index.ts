@@ -139,6 +139,3 @@ Main.run().catch((error) => {
 	console.error("Inference Server Manager failed to start", error);
 	process.exitCode = 1;
 });
-
-// Re-export App type for Eden Treaty
-export type { App } from "./app";

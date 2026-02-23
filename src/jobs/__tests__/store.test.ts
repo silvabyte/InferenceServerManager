@@ -1,5 +1,5 @@
-import { afterAll, beforeEach, describe, expect, test } from "bun:test";
 import { Database } from "bun:sqlite";
+import { afterAll, beforeEach, describe, expect, test } from "bun:test";
 import { drizzle } from "drizzle-orm/bun-sqlite";
 import * as schema from "../../db/schema";
 import { JobStore } from "../store";
@@ -219,7 +219,15 @@ describe("JobStore", () => {
 				text: "Hello world",
 				language: "en",
 				duration: 5.0,
-				segments: [{ text: "Hello world", start: 0, end: 5, confidence: 0.95, speaker: null }],
+				segments: [
+					{
+						text: "Hello world",
+						start: 0,
+						end: 5,
+						confidence: 0.95,
+						speaker: null,
+					},
+				],
 				confidence: 0.95,
 				provider: "whisper-server",
 				metadata: {},

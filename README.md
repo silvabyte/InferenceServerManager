@@ -62,6 +62,57 @@ bun run dev
 bun run start
 ```
 
+## Installation as a Service
+
+### Prerequisites
+
+- [Bun](https://bun.sh) runtime installed
+- Linux with systemd
+- FFmpeg installed and available on PATH
+
+### Build & Install
+
+```bash
+# Compile to standalone binary
+bun run build
+
+# Install as a systemd user service
+./dist/inference-server-manager install
+
+# Edit the environment file (set WHISPER_SERVER_CMD at minimum)
+nano ~/.config/transcription_manager/env
+
+# Restart to pick up env changes
+systemctl --user restart inference-server-manager
+```
+
+### Updating
+
+After pulling new code:
+
+```bash
+./dist/inference-server-manager update
+```
+
+This recompiles the binary and restarts the service.
+
+### Managing the Service
+
+```bash
+# Check status
+./dist/inference-server-manager status
+# or: systemctl --user status inference-server-manager
+
+# View logs
+journalctl --user -u inference-server-manager -f
+
+# Restart
+systemctl --user restart inference-server-manager
+
+# Uninstall
+./dist/inference-server-manager uninstall
+```
+
 ## Environment Variables
 
 | Variable                     | Description                          | Default                 |
@@ -246,13 +297,18 @@ sudo pacman -S ffmpeg
 
 ## Deployment
 
-This service powers `voice.audetic.link`. For deployment:
+This service powers `voice.audetic.link`. For production deployment, use the built-in systemd service installer:
 
-1. Ensure `WHISPER_SERVER_CMD` points to a valid whisper server binary
+```bash
+bun run build && ./dist/inference-server-manager install
+```
+
+See [Installation as a Service](#installation-as-a-service) for full details. Key steps:
+
+1. Set `WHISPER_SERVER_CMD` in `~/.config/transcription_manager/env`
 2. Set `CORS_ORIGIN` to your frontend domain
-3. Configure worker pool size based on available resources
+3. Configure worker pool size in `~/.config/transcription_manager/settings.json5`
 4. Install FFmpeg for video file support
-5. Use a process manager (systemd, pm2) for production
 
 ## Development
 
