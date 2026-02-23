@@ -1,28 +1,45 @@
+import { createWriteStream } from "node:fs";
 import { join } from "node:path";
 import pino from "pino";
 import { AppName, Global } from "../global";
 
 export namespace Log {
-	const targets = [
-		{
-			target: "pino-pretty",
-		},
-		{
-			options: {
-				file: join(Global.Path.logs, "log"),
-				frequency: "hourly",
-				mkdir: true,
-			},
-			target: "pino-roll",
-		},
-	];
+	const isCompiledBinary = !process.execPath.endsWith("/bun");
 
-	export const transport = pino.transport({
-		level: Bun.env.LOG_LEVEL ?? "info",
-		targets,
-	});
+	function createLogger() {
+		if (isCompiledBinary) {
+			// Compiled binary: pino transports (worker_threads) can't resolve npm
+			// modules. Use pino.multistream for stdout (journalctl) + file output.
+			const logFile = join(Global.Path.logs, "log");
+			const fileStream = createWriteStream(logFile, { flags: "a" });
+			const level = (Bun.env.LOG_LEVEL ?? "info") as pino.Level;
+			return pino(
+				{ level },
+				pino.multistream([
+					{ stream: process.stdout, level },
+					{ stream: fileStream, level },
+				]),
+			);
+		}
+		// Dev mode: use transports for pino-pretty and pino-roll
+		const transport = pino.transport({
+			level: Bun.env.LOG_LEVEL ?? "info",
+			targets: [
+				{ target: "pino-pretty" },
+				{
+					options: {
+						file: join(Global.Path.logs, "log"),
+						frequency: "hourly",
+						mkdir: true,
+					},
+					target: "pino-roll",
+				},
+			],
+		});
+		return pino(transport);
+	}
 
-	export const instance = pino(transport).child({
+	export const instance = createLogger().child({
 		app: AppName,
 	});
 
