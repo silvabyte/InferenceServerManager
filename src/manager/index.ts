@@ -462,7 +462,7 @@ export namespace Manager {
 		worker: Worker,
 		audioBase64: string,
 		language?: string,
-		_timestamps = true,
+		timestamps = true,
 		metadata: Record<string, string> = {},
 	): Promise<TranscriptionResult> {
 		const url = `${worker.baseUrl}/inference`;
@@ -479,7 +479,7 @@ export namespace Manager {
 		const formData = new FormData();
 		const audioBlob = new Blob([audioBytes], { type: "audio/wav" });
 		formData.append("file", audioBlob, "audio.wav");
-		formData.append("response_format", "json");
+		formData.append("response_format", timestamps ? "verbose_json" : "json");
 		formData.append("temperature", "0.0");
 		formData.append("language", language || "en");
 
