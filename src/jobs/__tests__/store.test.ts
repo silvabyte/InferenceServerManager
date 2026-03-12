@@ -273,9 +273,11 @@ describe("JobStore", () => {
 				text: "Hello world",
 				segments: [
 					{
+						id: 0,
 						start: 0.0,
 						end: 5.0,
 						text: "Hello world",
+						tokens: [1, 2],
 						words: [
 							{ word: "Hello", start: 0.0, end: 0.32, probability: 0.95 },
 							{ word: "world", start: 0.33, end: 0.8, probability: 0.92 },

@@ -10,6 +10,10 @@ import {
 	JobStore,
 } from "../jobs";
 import { Log } from "../observability/logger";
+import {
+	TranscriptionResultSchema,
+	WhisperVerboseResponseSchema,
+} from "./schemas";
 
 const log = Log.child({ module: "jobs-routes" });
 
@@ -49,8 +53,8 @@ const JobDetailSchema = t.Object({
 	language: t.Nullable(t.String()),
 	timestamps: t.Boolean(),
 	metadata: t.Nullable(t.Record(t.String(), t.String())),
-	result: t.Nullable(t.Any()),
-	verboseResult: t.Optional(t.Any()),
+	result: t.Nullable(TranscriptionResultSchema),
+	verboseResult: t.Optional(WhisperVerboseResponseSchema),
 	error: t.Nullable(t.String()),
 	createdAt: t.String(),
 	startedAt: t.Nullable(t.String()),

@@ -60,7 +60,9 @@ export const transcriptionJobs = sqliteTable(
 		result: text("result", {
 			mode: "json",
 		}).$type<TranscriptionResult | null>(),
-		verboseResult: text("verbose_result", { mode: "json" }).$type<unknown>(),
+		verboseResult: text("verbose_result", {
+			mode: "json",
+		}).$type<WhisperVerboseResponse | null>(),
 		error: text("error"),
 
 		// Timestamps (stored as milliseconds)
@@ -103,4 +105,48 @@ export interface TranscriptionResult {
 	confidence: number;
 	provider: string;
 	metadata: Record<string, string>;
+}
+
+/**
+ * Whisper verbose_json word-level timing
+ */
+export interface WhisperWord {
+	word: string;
+	start: number;
+	end: number;
+	t_dtw?: number;
+	probability?: number;
+}
+
+/**
+ * Whisper verbose_json segment
+ */
+export interface WhisperSegment {
+	id: number;
+	text: string;
+	start: number;
+	end: number;
+	tokens: number[];
+	words?: WhisperWord[];
+	temperature?: number;
+	avg_logprob?: number;
+	no_speech_prob?: number;
+	compression_ratio?: number;
+	confidence?: number;
+	speaker?: string;
+}
+
+/**
+ * Whisper verbose_json full response
+ */
+export interface WhisperVerboseResponse {
+	task?: string;
+	language?: string;
+	duration?: number;
+	text?: string;
+	transcript?: string;
+	segments: WhisperSegment[];
+	detected_language?: string;
+	detected_language_probability?: number;
+	language_probabilities?: Record<string, number>;
 }

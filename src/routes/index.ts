@@ -3,27 +3,12 @@ import { t } from "elysia";
 import { Manager } from "../manager";
 import { Log } from "../observability/logger";
 import { registerJobRoutes } from "./jobs";
+import {
+	TranscriptionResultSchema,
+	WhisperVerboseResponseSchema,
+} from "./schemas";
 
 const log = Log.child({ module: "routes" });
-
-// TypeBox Schemas (collocated with routes)
-const TranscriptionSegmentSchema = t.Object({
-	confidence: t.Nullable(t.Number()),
-	end: t.Number(),
-	speaker: t.Nullable(t.String()),
-	start: t.Number(),
-	text: t.String(),
-});
-
-const TranscriptionResultSchema = t.Object({
-	confidence: t.Number(),
-	duration: t.Number(),
-	language: t.String(),
-	metadata: t.Record(t.String(), t.String()),
-	provider: t.String(),
-	segments: t.Array(TranscriptionSegmentSchema),
-	text: t.String(),
-});
 
 const TranscriptionRequestSchema = t.Object({
 	content: t.String({ description: "Base64 encoded audio", minLength: 1 }),
@@ -269,7 +254,7 @@ export function registerRoutes(app: Elysia): void {
 				},
 				response: {
 					200: t.Object({
-						result: t.Any(),
+						result: WhisperVerboseResponseSchema,
 						success: t.Boolean(),
 					}),
 					500: ErrorResponseSchema,

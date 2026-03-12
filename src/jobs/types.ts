@@ -2,6 +2,7 @@ import type {
 	JOB_STATUS,
 	TranscriptionResult,
 	TranscriptionSegment,
+	WhisperVerboseResponse,
 } from "../db/schema";
 
 /**
@@ -29,7 +30,7 @@ export interface Job {
 	progress: number;
 	progressMessage: string | null;
 	result: TranscriptionResult | null;
-	verboseResult: unknown;
+	verboseResult: WhisperVerboseResponse | null;
 	error: string | null;
 	createdAt: Date;
 	startedAt: Date | null;

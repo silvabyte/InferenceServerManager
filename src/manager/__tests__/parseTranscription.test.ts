@@ -7,9 +7,11 @@ describe("parseTranscription", () => {
 			text: "Hello world",
 			segments: [
 				{
+					id: 0,
 					start: 0.0,
 					end: 2.5,
 					text: " Hello world",
+					tokens: [1, 2, 3],
 					confidence: 0.92,
 				},
 			],
@@ -56,7 +58,7 @@ describe("parseTranscription", () => {
 	test("should trim segment text", () => {
 		const raw = {
 			text: "hello",
-			segments: [{ start: 0, end: 1, text: "  hello  " }],
+			segments: [{ id: 0, start: 0, end: 1, text: "  hello  ", tokens: [1] }],
 		};
 		const result = Manager.parseTranscription(raw);
 		expect(result.segments[0]?.text).toBe("hello");

@@ -5,6 +5,7 @@ import {
 	JOB_STATUS,
 	type TranscriptionResult,
 	transcriptionJobs,
+	type WhisperVerboseResponse,
 } from "../db";
 import { Log } from "../observability/logger";
 import type {
@@ -219,7 +220,7 @@ export namespace JobStore {
 	export function complete(
 		id: string,
 		result: TranscriptionResult,
-		verboseResult?: unknown,
+		verboseResult?: WhisperVerboseResponse,
 	): void {
 		const db = DB.get();
 		db.update(transcriptionJobs)

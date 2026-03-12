@@ -1,5 +1,9 @@
 import { Config } from "../config";
-import type { TranscriptionResult, TranscriptionSegment } from "../db/schema";
+import type {
+	TranscriptionResult,
+	TranscriptionSegment,
+	WhisperVerboseResponse,
+} from "../db/schema";
 import { Log } from "../observability/logger";
 import { type Worker, WorkerState, Workers } from "../workers";
 
@@ -414,7 +418,7 @@ export namespace Manager {
 	export async function transcribeRaw(
 		audioBase64: string,
 		language?: string,
-	): Promise<unknown> {
+	): Promise<WhisperVerboseResponse> {
 		const worker = selectWorker();
 		if (!worker) {
 			throw new Error("No healthy workers available");
@@ -456,23 +460,18 @@ export namespace Manager {
 	}
 
 	export function parseTranscription(
-		raw: unknown,
+		raw: WhisperVerboseResponse,
 		language?: string,
 		metadata: Record<string, string> = {},
 	): TranscriptionResult {
-		// biome-ignore lint/suspicious/noExplicitAny: Whisper API response structure varies
-		const json = raw as any;
-		const text = json.text || json.transcript || "";
-		const segments: TranscriptionSegment[] = (json.segments || []).map(
-			// biome-ignore lint/suspicious/noExplicitAny: Whisper API response has flexible segment structure
-			(s: any) => ({
-				confidence: s.confidence || null,
-				end: s.end || s.start || 0,
-				speaker: s.speaker || null,
-				start: s.start || 0,
-				text: (s.text || "").trim(),
-			}),
-		);
+		const text = raw.text || raw.transcript || "";
+		const segments: TranscriptionSegment[] = (raw.segments || []).map((s) => ({
+			confidence: s.confidence ?? null,
+			end: s.end || s.start || 0,
+			speaker: s.speaker ?? null,
+			start: s.start || 0,
+			text: (s.text || "").trim(),
+		}));
 
 		const duration =
 			segments.length > 0 ? (segments[segments.length - 1]?.end ?? 0) : 0;
@@ -502,7 +501,7 @@ export namespace Manager {
 		audioBase64: string,
 		language?: string,
 		responseFormat = "verbose_json",
-	): Promise<unknown> {
+	): Promise<WhisperVerboseResponse> {
 		const url = `${worker.baseUrl}/inference`;
 
 		// Clean base64 string
@@ -543,7 +542,7 @@ export namespace Manager {
 				throw new Error(`HTTP ${response.status}: ${text}`);
 			}
 
-			return await response.json();
+			return (await response.json()) as WhisperVerboseResponse;
 		} finally {
 			clearTimeout(timeout);
 		}
