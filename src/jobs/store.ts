@@ -35,6 +35,7 @@ function rowToJob(row: typeof transcriptionJobs.$inferSelect): Job {
 		progress: row.progress ?? 0,
 		progressMessage: row.progressMessage,
 		result: row.result as TranscriptionResult | null,
+		verboseResult: row.verboseResult ?? null,
 		error: row.error,
 		createdAt: row.createdAt,
 		startedAt: row.startedAt,
@@ -67,6 +68,7 @@ export namespace JobStore {
 			progress: 0,
 			progressMessage: null,
 			result: null,
+			verboseResult: null,
 			error: null,
 			createdAt: now,
 			startedAt: null,
@@ -83,6 +85,7 @@ export namespace JobStore {
 		return {
 			...jobData,
 			audioPath: null,
+			verboseResult: null,
 		};
 	}
 
@@ -213,7 +216,11 @@ export namespace JobStore {
 	/**
 	 * Mark job as completed with result
 	 */
-	export function complete(id: string, result: TranscriptionResult): void {
+	export function complete(
+		id: string,
+		result: TranscriptionResult,
+		verboseResult?: unknown,
+	): void {
 		const db = DB.get();
 		db.update(transcriptionJobs)
 			.set({
@@ -221,6 +228,7 @@ export namespace JobStore {
 				progress: 100,
 				progressMessage: "Transcription complete",
 				result,
+				...(verboseResult !== undefined ? { verboseResult } : {}),
 				completedAt: new Date(),
 			})
 			.where(eq(transcriptionJobs.id, id))

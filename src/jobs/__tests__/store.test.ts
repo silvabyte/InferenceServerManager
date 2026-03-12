@@ -24,6 +24,7 @@ testDb.exec(`
 		progress INTEGER DEFAULT 0,
 		progress_message TEXT,
 		result TEXT,
+		verbose_result TEXT,
 		error TEXT,
 		created_at INTEGER NOT NULL,
 		started_at INTEGER,
@@ -240,6 +241,81 @@ describe("JobStore", () => {
 			expect(completed?.progress).toBe(100);
 			expect(completed?.result?.text).toBe("Hello world");
 			expect(completed?.completedAt).toBeInstanceOf(Date);
+		});
+
+		test("should store verbose result alongside normalized result", () => {
+			const job = JobStore.create({
+				originalFilename: "test.wav",
+				inputFormat: "wav",
+				inputPath: "/uploads/test.wav",
+				fileSizeBytes: 100,
+			});
+
+			const result = {
+				text: "Hello world",
+				language: "en",
+				duration: 5.0,
+				segments: [
+					{
+						text: "Hello world",
+						start: 0,
+						end: 5,
+						confidence: 0.95,
+						speaker: null,
+					},
+				],
+				confidence: 0.95,
+				provider: "whisper-server",
+				metadata: {},
+			};
+
+			const verboseResult = {
+				text: "Hello world",
+				segments: [
+					{
+						start: 0.0,
+						end: 5.0,
+						text: "Hello world",
+						words: [
+							{ word: "Hello", start: 0.0, end: 0.32, probability: 0.95 },
+							{ word: "world", start: 0.33, end: 0.8, probability: 0.92 },
+						],
+					},
+				],
+			};
+
+			JobStore.complete(job.id, result, verboseResult);
+
+			const completed = JobStore.get(job.id);
+			expect(completed?.status).toBe("completed");
+			expect(completed?.result?.text).toBe("Hello world");
+			expect(completed?.verboseResult).toBeDefined();
+			expect(completed?.verboseResult).toEqual(verboseResult);
+		});
+
+		test("should complete without verbose result (backwards compatible)", () => {
+			const job = JobStore.create({
+				originalFilename: "test.wav",
+				inputFormat: "wav",
+				inputPath: "/uploads/test.wav",
+				fileSizeBytes: 100,
+			});
+
+			const result = {
+				text: "Test",
+				language: "en",
+				duration: 1.0,
+				segments: [],
+				confidence: 1.0,
+				provider: "test",
+				metadata: {},
+			};
+
+			JobStore.complete(job.id, result);
+
+			const completed = JobStore.get(job.id);
+			expect(completed?.status).toBe("completed");
+			expect(completed?.verboseResult).toBeNull();
 		});
 	});
 

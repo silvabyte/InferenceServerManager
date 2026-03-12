@@ -190,7 +190,6 @@ export function registerRoutes(app: Elysia): void {
 					const result = await Manager.transcribe(
 						body.content,
 						body.language,
-						body.timestamps ?? true,
 						body.metadata ?? {},
 					);
 
@@ -219,6 +218,60 @@ export function registerRoutes(app: Elysia): void {
 				},
 				response: {
 					200: TranscriptionResponseSchema,
+					500: ErrorResponseSchema,
+				},
+			},
+		)
+
+		.post(
+			"/api/v1/transcriptions/verbose",
+			async ({ body, set }) => {
+				try {
+					log.info(
+						{ language: body.language },
+						"Received verbose transcription request",
+					);
+
+					const result = await Manager.transcribeRaw(
+						body.content,
+						body.language,
+					);
+
+					return {
+						result,
+						success: true,
+					};
+				} catch (error) {
+					log.error({ error }, "Verbose transcription request failed");
+					set.status = 500;
+					return {
+						code: "TRANSCRIPTION_ERROR",
+						error: error instanceof Error ? error.message : "Unknown error",
+						success: false,
+					};
+				}
+			},
+			{
+				body: t.Object({
+					content: t.String({
+						description: "Base64 encoded audio",
+						minLength: 1,
+					}),
+					language: t.Optional(
+						t.String({ description: "Language code (e.g., 'en')" }),
+					),
+				}),
+				detail: {
+					description:
+						"Submit audio for transcription and receive the raw whisper verbose_json response including word-level timestamps",
+					summary: "Raw verbose transcription",
+					tags: ["Transcription"],
+				},
+				response: {
+					200: t.Object({
+						result: t.Any(),
+						success: t.Boolean(),
+					}),
 					500: ErrorResponseSchema,
 				},
 			},

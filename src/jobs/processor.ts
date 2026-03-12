@@ -196,7 +196,6 @@ export namespace JobProcessor {
 		const audioBuffer = await audioFile.arrayBuffer();
 		const audioBase64 = Buffer.from(audioBuffer).toString("base64");
 
-		// Update progress
 		JobStore.updateStatus(
 			job.id,
 			JOB_STATUS.TRANSCRIBING,
@@ -204,15 +203,19 @@ export namespace JobProcessor {
 			"Sending to transcription service...",
 		);
 
-		// Send to manager for transcription
-		const result = await Manager.transcribe(
+		// Single Whisper call — get raw verbose_json
+		const raw = await Manager.transcribeRaw(
 			audioBase64,
 			job.language ?? undefined,
-			job.timestamps,
+		);
+
+		// Derive normalized result from raw response (pure function, no network call)
+		const result = Manager.parseTranscription(
+			raw,
+			job.language ?? undefined,
 			job.metadata ?? {},
 		);
 
-		// Update progress
 		JobStore.updateStatus(
 			job.id,
 			JOB_STATUS.TRANSCRIBING,
@@ -220,7 +223,7 @@ export namespace JobProcessor {
 			"Finalizing transcription...",
 		);
 
-		// Complete the job
-		JobStore.complete(job.id, result);
+		// Store both normalized and raw results
+		JobStore.complete(job.id, result, raw);
 	}
 }

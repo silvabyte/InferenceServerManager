@@ -104,6 +104,15 @@ export namespace DB {
 			CREATE INDEX IF NOT EXISTS idx_created_at ON transcription_jobs(created_at)
 		`);
 
+		// Migration: add verbose_result column for raw Whisper response
+		try {
+			sqlite.exec(
+				`ALTER TABLE transcription_jobs ADD COLUMN verbose_result TEXT`,
+			);
+		} catch (_e) {
+			// Column already exists — expected on subsequent runs
+		}
+
 		log.debug("Database migrations complete");
 	}
 }

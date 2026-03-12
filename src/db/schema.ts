@@ -60,6 +60,7 @@ export const transcriptionJobs = sqliteTable(
 		result: text("result", {
 			mode: "json",
 		}).$type<TranscriptionResult | null>(),
+		verboseResult: text("verbose_result", { mode: "json" }).$type<unknown>(),
 		error: text("error"),
 
 		// Timestamps (stored as milliseconds)

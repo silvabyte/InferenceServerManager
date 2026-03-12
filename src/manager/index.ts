@@ -1,4 +1,5 @@
 import { Config } from "../config";
+import type { TranscriptionResult, TranscriptionSegment } from "../db/schema";
 import { Log } from "../observability/logger";
 import { type Worker, WorkerState, Workers } from "../workers";
 
@@ -410,12 +411,10 @@ export namespace Manager {
 		return healthyWorkers[idx] ?? null;
 	}
 
-	export async function transcribe(
+	export async function transcribeRaw(
 		audioBase64: string,
 		language?: string,
-		timestamps = true,
-		metadata: Record<string, string> = {},
-	): Promise<TranscriptionResult> {
+	): Promise<unknown> {
 		const worker = selectWorker();
 		if (!worker) {
 			throw new Error("No healthy workers available");
@@ -426,19 +425,17 @@ export namespace Manager {
 			{
 				language,
 				requestCount: worker.requestCount,
-				timestamps,
 				workerId: worker.id,
 			},
 			"Sending transcription request to worker",
 		);
 
 		try {
-			const result = await proxyToWorker(
+			const result = await sendToWorker(
 				worker,
 				audioBase64,
 				language,
-				timestamps,
-				metadata,
+				"verbose_json",
 			);
 
 			// Check if worker needs recycling
@@ -458,13 +455,54 @@ export namespace Manager {
 		}
 	}
 
-	async function proxyToWorker(
+	export function parseTranscription(
+		raw: unknown,
+		language?: string,
+		metadata: Record<string, string> = {},
+	): TranscriptionResult {
+		// biome-ignore lint/suspicious/noExplicitAny: Whisper API response structure varies
+		const json = raw as any;
+		const text = json.text || json.transcript || "";
+		const segments: TranscriptionSegment[] = (json.segments || []).map(
+			// biome-ignore lint/suspicious/noExplicitAny: Whisper API response has flexible segment structure
+			(s: any) => ({
+				confidence: s.confidence || null,
+				end: s.end || s.start || 0,
+				speaker: s.speaker || null,
+				start: s.start || 0,
+				text: (s.text || "").trim(),
+			}),
+		);
+
+		const duration =
+			segments.length > 0 ? (segments[segments.length - 1]?.end ?? 0) : 0;
+
+		return {
+			confidence: segments.length > 0 ? 1.0 : 0.0,
+			duration,
+			language: language || "en",
+			metadata,
+			provider: "whisper-server",
+			segments,
+			text: text.trim(),
+		};
+	}
+
+	export async function transcribe(
+		audioBase64: string,
+		language?: string,
+		metadata: Record<string, string> = {},
+	): Promise<TranscriptionResult> {
+		const raw = await transcribeRaw(audioBase64, language);
+		return parseTranscription(raw, language, metadata);
+	}
+
+	async function sendToWorker(
 		worker: Worker,
 		audioBase64: string,
 		language?: string,
-		timestamps = true,
-		metadata: Record<string, string> = {},
-	): Promise<TranscriptionResult> {
+		responseFormat = "verbose_json",
+	): Promise<unknown> {
 		const url = `${worker.baseUrl}/inference`;
 
 		// Clean base64 string
@@ -479,7 +517,7 @@ export namespace Manager {
 		const formData = new FormData();
 		const audioBlob = new Blob([audioBytes], { type: "audio/wav" });
 		formData.append("file", audioBlob, "audio.wav");
-		formData.append("response_format", timestamps ? "verbose_json" : "json");
+		formData.append("response_format", responseFormat);
 		formData.append("temperature", "0.0");
 		formData.append("language", language || "en");
 
@@ -505,38 +543,7 @@ export namespace Manager {
 				throw new Error(`HTTP ${response.status}: ${text}`);
 			}
 
-			// biome-ignore lint/suspicious/noExplicitAny: Whisper API response structure varies
-			const json = (await response.json()) as any;
-
-			// Parse whisper server response
-			const text = json.text || json.transcript || "";
-			const segments: TranscriptionSegment[] = (json.segments || []).map(
-				// biome-ignore lint/suspicious/noExplicitAny: Whisper API response has flexible segment structure
-				(s: any) => ({
-					confidence: s.confidence || null,
-					end: s.end || s.start || 0,
-					speaker: s.speaker || null,
-					start: s.start || 0,
-					text: (s.text || "").trim(),
-				}),
-			);
-
-			const duration =
-				segments.length > 0 ? (segments[segments.length - 1]?.end ?? 0) : 0;
-
-			return {
-				confidence: segments.length > 0 ? 1.0 : 0.0,
-				duration,
-				language: language || "en",
-				metadata: {
-					...metadata,
-					worker_id: worker.id,
-					worker_url: worker.baseUrl,
-				},
-				provider: "whisper-server",
-				segments,
-				text: text.trim(),
-			};
+			return await response.json();
 		} finally {
 			clearTimeout(timeout);
 		}
@@ -588,23 +595,4 @@ export namespace Manager {
 			workers: status,
 		};
 	}
-}
-
-// Types for transcription results (collocated with manager)
-export interface TranscriptionSegment {
-	text: string;
-	start: number;
-	end: number;
-	confidence: number | null;
-	speaker: string | null;
-}
-
-export interface TranscriptionResult {
-	text: string;
-	language: string;
-	duration: number;
-	segments: TranscriptionSegment[];
-	confidence: number;
-	provider: string;
-	metadata: Record<string, string>;
 }

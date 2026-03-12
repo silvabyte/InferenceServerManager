@@ -29,6 +29,7 @@ export interface Job {
 	progress: number;
 	progressMessage: string | null;
 	result: TranscriptionResult | null;
+	verboseResult: unknown;
 	error: string | null;
 	createdAt: Date;
 	startedAt: Date | null;
