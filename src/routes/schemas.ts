@@ -22,12 +22,18 @@ export const TranscriptionResultSchema = t.Object({
 
 // --- Whisper verbose_json schemas ---
 
+// Whisper emits `null` (not omitted) for several numeric fields on silent
+// or low-confidence segments (e.g. avg_logprob, no_speech_prob). Typebox's
+// `t.Optional(T)` means `T | undefined`, which does NOT accept explicit
+// `null`, so we wrap every whisper-numeric-that-can-be-null in this helper.
+const OptionalNullableNumber = t.Optional(t.Union([t.Number(), t.Null()]));
+
 export const WhisperWordSchema = t.Object({
 	word: t.String(),
 	start: t.Number(),
 	end: t.Number(),
-	t_dtw: t.Optional(t.Number()),
-	probability: t.Optional(t.Number()),
+	t_dtw: OptionalNullableNumber,
+	probability: OptionalNullableNumber,
 });
 
 export const WhisperSegmentSchema = t.Object({
@@ -37,22 +43,22 @@ export const WhisperSegmentSchema = t.Object({
 	end: t.Number(),
 	tokens: t.Array(t.Number()),
 	words: t.Optional(t.Array(WhisperWordSchema)),
-	temperature: t.Optional(t.Number()),
-	avg_logprob: t.Optional(t.Number()),
-	no_speech_prob: t.Optional(t.Number()),
-	compression_ratio: t.Optional(t.Number()),
-	confidence: t.Optional(t.Number()),
+	temperature: OptionalNullableNumber,
+	avg_logprob: OptionalNullableNumber,
+	no_speech_prob: OptionalNullableNumber,
+	compression_ratio: OptionalNullableNumber,
+	confidence: OptionalNullableNumber,
 	speaker: t.Optional(t.String()),
 });
 
 export const WhisperVerboseResponseSchema = t.Object({
 	task: t.Optional(t.String()),
 	language: t.Optional(t.String()),
-	duration: t.Optional(t.Number()),
+	duration: OptionalNullableNumber,
 	text: t.Optional(t.String()),
 	transcript: t.Optional(t.String()),
 	segments: t.Array(WhisperSegmentSchema),
 	detected_language: t.Optional(t.String()),
-	detected_language_probability: t.Optional(t.Number()),
+	detected_language_probability: OptionalNullableNumber,
 	language_probabilities: t.Optional(t.Record(t.String(), t.Number())),
 });
