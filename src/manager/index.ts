@@ -526,7 +526,7 @@ export namespace Manager {
 		);
 
 		const controller = new AbortController();
-		const timeout = setTimeout(() => controller.abort(), 120000); // 2 min timeout
+		const timeout = setTimeout(() => controller.abort(), 3600000); // 60 min timeout
 
 		try {
 			const response = await fetch(url, {
