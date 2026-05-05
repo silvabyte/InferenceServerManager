@@ -525,27 +525,25 @@ export namespace Manager {
 			"Calling whisper server",
 		);
 
-		const controller = new AbortController();
-		const timeout = setTimeout(() => controller.abort(), 3600000); // 60 min timeout
+		const response = await fetch(url, {
+			body: formData,
+			method: "POST",
+			// 60-min wall-clock cap. Bun's fetch has a hardcoded 5-min inactivity
+			// timeout (PR #6217), measured between received chunks. whisper.cpp's
+			// /inference is non-streaming so the whole inference counts as "idle"
+			// and trips it; `timeout: false` disables Bun's internal timeout so
+			// this AbortSignal can actually govern the request (see bun #16682).
+			signal: AbortSignal.timeout(3600000),
+			// @ts-expect-error — `timeout` is supported at runtime but not declared in BunFetchRequestInit
+			timeout: false,
+		});
 
-		try {
-			const response = await fetch(url, {
-				body: formData,
-				method: "POST",
-				signal: controller.signal,
-			});
-
-			clearTimeout(timeout);
-
-			if (!response.ok) {
-				const text = await response.text();
-				throw new Error(`HTTP ${response.status}: ${text}`);
-			}
-
-			return (await response.json()) as WhisperVerboseResponse;
-		} finally {
-			clearTimeout(timeout);
+		if (!response.ok) {
+			const text = await response.text();
+			throw new Error(`HTTP ${response.status}: ${text}`);
 		}
+
+		return (await response.json()) as WhisperVerboseResponse;
 	}
 
 	function scheduleWorkerRotation(worker: Worker): void {
