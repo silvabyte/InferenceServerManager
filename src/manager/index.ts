@@ -11,6 +11,8 @@ const log = Log.child({ module: "Manager" });
 
 export namespace Manager {
 	export const workers = new Map<string, Worker>();
+
+	//TODO:AGENT: its not clear what rrIndex is, lets use a name that makes it clear
 	let rrIndex = 0;
 	let healthCheckInterval: Timer | null = null;
 	let auditCheckInterval: Timer | null = null;
