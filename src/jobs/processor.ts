@@ -3,6 +3,7 @@ import { JOB_STATUS } from "../db/schema";
 import { Global } from "../global";
 import { Manager } from "../manager";
 import { Log } from "../observability/logger";
+import { Metrics } from "../observability/metrics";
 import { FFmpeg } from "./ffmpeg";
 import { JobStore } from "./store";
 import type { Job } from "./types";
@@ -133,10 +134,12 @@ export namespace JobProcessor {
 
 			// Transcribe the audio
 			await transcribeAudio(job, audioPath);
+			Metrics.recordJob("completed");
 		} catch (error) {
 			const errorMessage =
 				error instanceof Error ? error.message : "Unknown error";
 			JobStore.fail(job.id, errorMessage);
+			Metrics.recordJob("failed");
 			log.error({ jobId: job.id, error: errorMessage }, "Job failed");
 		}
 	}

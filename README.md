@@ -126,6 +126,25 @@ systemctl --user restart inference-server-manager
 | `LOG_LEVEL`                  | Pino log level (see below)           | `info`                  |
 | `XDG_DIR_NAME`               | XDG directory name for data storage  | `transcription_manager` |
 
+### Metrics (OpenTelemetry)
+
+Metrics are emitted via the OpenTelemetry SDK and pushed to an OTLP collector.
+Metrics are **disabled unless `OTEL_EXPORTER_OTLP_ENDPOINT` (or
+`OTEL_EXPORTER_OTLP_METRICS_ENDPOINT`) is set** — with no endpoint configured the
+SDK is inert and the service behaves exactly as before.
+
+| Variable                              | Description                                                              | Default                    |
+| ------------------------------------- | ------------------------------------------------------------------------ | -------------------------- |
+| `OTEL_EXPORTER_OTLP_ENDPOINT`         | OTLP collector base URL (e.g. `http://localhost:4318`); `/v1/metrics` is appended | unset (metrics disabled)   |
+| `OTEL_EXPORTER_OTLP_METRICS_ENDPOINT` | Override the endpoint for metrics only                                   | falls back to the base one |
+| `OTEL_EXPORTER_OTLP_HEADERS`          | Extra OTLP headers, e.g. `Authorization=Bearer ...`                      | none                       |
+| `OTEL_SERVICE_NAME`                   | `service.name` resource attribute                                        | `inference-server-manager` |
+| `OTEL_METRIC_EXPORT_INTERVAL`         | Export interval in milliseconds                                          | `60000`                    |
+
+Emitted instruments: `http.server.request.duration`, `transcription.duration`,
+`jobs.processed`, `worker.respawns`, `worker.pool.total`, `worker.pool.healthy`,
+`jobs.queued`, `jobs.active`.
+
 ## Logging
 
 ### Log Levels
@@ -135,7 +154,7 @@ systemctl --user restart inference-server-manager
 | `error` | Critical failures only (worker spawn failures, max health check failures) |
 | `warn`  | Warnings (low worker count, worker health degradation)                   |
 | `info`  | Default. Manager lifecycle events (startup, shutdown, worker ready)       |
-| `debug` | Health check details, startup connection attempts, heartbeat metrics     |
+| `debug` | Health check details, startup connection attempts, job status updates    |
 | `trace` | Reserved for future use                                                  |
 
 ### Worker Logs
