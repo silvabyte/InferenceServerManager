@@ -5,12 +5,15 @@ import type {
 	WhisperVerboseResponse,
 } from "../db/schema";
 import { Log } from "../observability/logger";
+import { Metrics } from "../observability/metrics";
 import { type Worker, WorkerState, Workers } from "../workers";
 
 const log = Log.child({ module: "Manager" });
 
 export namespace Manager {
 	export const workers = new Map<string, Worker>();
+
+	//TODO:AGENT: its not clear what rrIndex is, lets use a name that makes it clear
 	let rrIndex = 0;
 	let healthCheckInterval: Timer | null = null;
 	let auditCheckInterval: Timer | null = null;
@@ -285,7 +288,7 @@ export namespace Manager {
 								},
 								"Worker unhealthy, replacing",
 							);
-							replaceWorker(worker);
+							replaceWorker(worker, "unhealthy");
 						} else if (worker.consecutiveFailures >= HEALTH_MAX_FAILURES - 1) {
 							log.warn(
 								{
@@ -318,6 +321,7 @@ export namespace Manager {
 					{ workerId: worker.id },
 					"Worker process not alive, respawning",
 				);
+				Metrics.recordWorkerRespawn("dead");
 				workers.delete(worker.id);
 				spawnWorker(worker.port);
 			}
@@ -367,11 +371,15 @@ export namespace Manager {
 		log.info({ workerCount: workers.size }, "Pool recovery completed");
 	}
 
-	function replaceWorker(worker: Worker): void {
+	function replaceWorker(
+		worker: Worker,
+		reason: "unhealthy" | "rotation",
+	): void {
 		const port = worker.port;
 		const oldWorkerId = worker.id;
 
-		log.info({ port, workerId: oldWorkerId }, "Replacing worker");
+		log.info({ port, reason, workerId: oldWorkerId }, "Replacing worker");
+		Metrics.recordWorkerRespawn(reason);
 		worker.state = WorkerState.Unhealthy;
 		worker.acceptingRequests = false;
 
@@ -434,6 +442,7 @@ export namespace Manager {
 			"Sending transcription request to worker",
 		);
 
+		const startedAt = performance.now();
 		try {
 			const result = await sendToWorker(
 				worker,
@@ -441,6 +450,7 @@ export namespace Manager {
 				language,
 				"verbose_json",
 			);
+			Metrics.recordTranscription(performance.now() - startedAt, true);
 
 			// Check if worker needs recycling
 			if (worker.requestCount >= Config.config.workers.rotateThreshold) {
@@ -453,6 +463,7 @@ export namespace Manager {
 
 			return result;
 		} catch (error) {
+			Metrics.recordTranscription(performance.now() - startedAt, false);
 			worker.consecutiveFailures++;
 			log.error({ error, workerId: worker.id }, "Transcription request failed");
 			throw error;
@@ -550,7 +561,7 @@ export namespace Manager {
 		worker.acceptingRequests = false;
 		setTimeout(() => {
 			log.info({ workerId: worker.id }, "Rotating worker");
-			replaceWorker(worker);
+			replaceWorker(worker, "rotation");
 		}, 5000); // Wait a bit before rotating
 	}
 

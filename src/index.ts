@@ -3,8 +3,8 @@ import { createApp } from "./app";
 import { Config } from "./config";
 import { DB } from "./db";
 import { Cleanup, JobProcessor } from "./jobs";
-import { Observability } from "./observability";
 import { Log } from "./observability/logger";
+import { Metrics } from "./observability/metrics";
 
 let registered = false;
 let app: Elysia | null = null;
@@ -49,11 +49,8 @@ const cleanup = async () => {
 		DB.close();
 	}, "Failed to close database");
 
-	// End observability session
-	WithTry(
-		async () => Observability.dispose(),
-		"Failed to end observability session",
-	);
+	// Flush and shut down metrics (await so the final export goes out)
+	await WithTry(async () => Metrics.shutdown(), "Failed to shut down metrics");
 
 	if (app?.server) {
 		try {
@@ -65,6 +62,9 @@ const cleanup = async () => {
 	}
 
 	Log.info("Inference Server Manager shutdown complete");
+
+	// Flush buffered logs last (pino + Axiom) so shutdown lines are delivered.
+	await WithTry(async () => Log.shutdown(), "Failed to flush logs");
 };
 
 const registerShutdown = () => {
@@ -91,8 +91,8 @@ namespace Main {
 
 		// Config is loaded at module import, no need to call init()
 
-		// Start observability session (heartbeat pulse)
-		Observability.start();
+		// Initialize OpenTelemetry metrics (no-op unless an OTLP endpoint is set)
+		Metrics.init();
 
 		// Initialize the database
 		DB.init();
@@ -107,6 +107,12 @@ namespace Main {
 		// Start cleanup task
 		const retentionHours = Config.config.jobs?.retentionHours ?? 24;
 		Cleanup.start(retentionHours);
+
+		// Bind metric gauges to live worker-pool / job-queue state
+		Metrics.bindObservables({
+			poolStatus: () => Manager.getPoolStatus(),
+			processorStatus: () => JobProcessor.getStatus(),
+		});
 
 		try {
 			app = createApp();
