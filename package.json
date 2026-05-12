@@ -14,6 +14,7 @@
 		"check": "bunx biome check --write --unsafe"
 	},
 	"dependencies": {
+		"@axiomhq/js": "^1.6.1",
 		"@elysiajs/openapi": "^1.4.11",
 		"@opentelemetry/api": "^1.9.1",
 		"@opentelemetry/exporter-metrics-otlp-http": "^0.217.0",

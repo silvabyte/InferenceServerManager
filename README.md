@@ -126,24 +126,77 @@ systemctl --user restart inference-server-manager
 | `LOG_LEVEL`                  | Pino log level (see below)           | `info`                  |
 | `XDG_DIR_NAME`               | XDG directory name for data storage  | `transcription_manager` |
 
-### Metrics (OpenTelemetry)
+### Telemetry → Axiom
 
-Metrics are emitted via the OpenTelemetry SDK and pushed to an OTLP collector.
-Metrics are **disabled unless `OTEL_EXPORTER_OTLP_ENDPOINT` (or
-`OTEL_EXPORTER_OTLP_METRICS_ENDPOINT`) is set** — with no endpoint configured the
-SDK is inert and the service behaves exactly as before.
+Logs and metrics ship to [Axiom](https://axiom.co). **Everything is disabled
+unless `AXIOM_TOKEN` is set** — with no token the service behaves exactly as
+before (logs still go to stdout/journald + the rotating file; metrics are inert).
 
-| Variable                              | Description                                                              | Default                    |
-| ------------------------------------- | ------------------------------------------------------------------------ | -------------------------- |
-| `OTEL_EXPORTER_OTLP_ENDPOINT`         | OTLP collector base URL (e.g. `http://localhost:4318`); `/v1/metrics` is appended | unset (metrics disabled)   |
-| `OTEL_EXPORTER_OTLP_METRICS_ENDPOINT` | Override the endpoint for metrics only                                   | falls back to the base one |
-| `OTEL_EXPORTER_OTLP_HEADERS`          | Extra OTLP headers, e.g. `Authorization=Bearer ...`                      | none                       |
-| `OTEL_SERVICE_NAME`                   | `service.name` resource attribute                                        | `inference-server-manager` |
-| `OTEL_METRIC_EXPORT_INTERVAL`         | Export interval in milliseconds                                          | `60000`                    |
+Logs are sent with the `@axiomhq/js` client (in addition to stdout/journald and
+the rotating file). Metrics are sent over OTLP to Axiom's OpenTelemetry endpoint.
+
+| Variable                | Description                                                                 | Default                  |
+| ----------------------- | --------------------------------------------------------------------------- | ------------------------ |
+| `AXIOM_TOKEN`           | Axiom API token (`xaat-…`), or a personal token (then set `AXIOM_ORG_ID`)   | unset (telemetry off)    |
+| `AXIOM_ORG_ID`          | Org id — only needed when `AXIOM_TOKEN` is a personal token                  | none                     |
+| `AXIOM_URL`             | API base URL (EU region: `https://api.eu.axiom.co`)                         | `https://api.axiom.co`   |
+| `AXIOM_DATASET`         | Fallback dataset for both logs and metrics                                  | none                     |
+| `AXIOM_LOGS_DATASET`    | Dataset for logs (overrides `AXIOM_DATASET`)                                 | `AXIOM_DATASET`          |
+| `AXIOM_METRICS_DATASET` | Dataset for metrics (overrides `AXIOM_DATASET`)                              | `AXIOM_DATASET`          |
+
+Run `scripts/axiom-setup.sh` to create the `audetic-ism-logs` /
+`audetic-ism-metrics` datasets via the `axiom` CLI.
+
+Metric export interval and service name are configurable via the standard OTel
+env vars (`OTEL_METRIC_EXPORT_INTERVAL`, default `60000` ms; `OTEL_SERVICE_NAME`,
+default `inference-server-manager`). To send metrics to a non-Axiom OTLP
+collector instead, leave `AXIOM_TOKEN` unset and set `OTEL_EXPORTER_OTLP_ENDPOINT`
+(or `OTEL_EXPORTER_OTLP_METRICS_ENDPOINT`) plus `OTEL_EXPORTER_OTLP_HEADERS`.
 
 Emitted instruments: `http.server.request.duration`, `transcription.duration`,
 `jobs.processed`, `worker.respawns`, `worker.pool.total`, `worker.pool.healthy`,
 `jobs.queued`, `jobs.active`.
+
+#### Dashboard queries (APL)
+
+Axiom flattens OTLP metrics so each metric becomes its own field on the event
+(e.g. `['worker.pool.healthy']`, `['jobs.queued']`), instrument attributes land
+under `attributes.*`, and resource attributes under `service.*`.
+
+```apl
+// worker pool health over time
+['audetic-ism-metrics']
+| where isnotnull(['worker.pool.total'])
+| summarize total = max(['worker.pool.total']), healthy = max(['worker.pool.healthy']) by bin_auto(_time)
+
+// job queue depth
+['audetic-ism-metrics']
+| where isnotnull(['jobs.queued'])
+| summarize queued = max(['jobs.queued']), active = max(['jobs.active']) by bin_auto(_time)
+
+// jobs completed vs failed
+['audetic-ism-metrics']
+| where isnotnull(['jobs.processed'])
+| summarize sum(['jobs.processed']) by bin_auto(_time), ['attributes.outcome']
+
+// worker churn by reason
+['audetic-ism-metrics']
+| where isnotnull(['worker.respawns'])
+| summarize sum(['worker.respawns']) by bin_auto(_time), ['attributes.reason']
+
+// request rate / latency  (histograms land as *_sum / *_count / *_bucket fields)
+['audetic-ism-metrics']
+| where isnotnull(['http.server.request.duration_count'])
+| summarize requests = sum(['http.server.request.duration_count']) by bin_auto(_time), ['attributes.http.route']
+
+// errors in the logs
+['audetic-ism-logs']
+| where level_name == 'error'
+| summarize count() by bin_auto(_time), module
+```
+
+(Histogram field naming may vary with Axiom's OTLP mapping — check the dataset
+schema if a query comes back empty.)
 
 ## Logging
 
@@ -165,6 +218,12 @@ Worker subprocess output (stdout/stderr from WhisperServer) is written to separa
 ```
 
 This keeps the main console clean while preserving worker output for debugging.
+
+### Shipping logs to Axiom
+
+When `AXIOM_TOKEN` is set, application logs are also forwarded to Axiom — see
+[Telemetry → Axiom](#telemetry--axiom) above. This is additive: stdout/journald
+and the rotating file are unchanged.
 
 ## Configuration
 

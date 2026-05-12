@@ -20,6 +20,15 @@ INFERENCE_SERVER_HOST=0.0.0.0
 # Logging level (trace, debug, info, warn, error, fatal)
 LOG_LEVEL=info
 
+# Telemetry → Axiom (logs + metrics). Leave AXIOM_TOKEN unset to disable.
+# Run scripts/axiom-setup.sh to create the datasets.
+# AXIOM_TOKEN=xaat-...
+# AXIOM_LOGS_DATASET=audetic-ism-logs
+# AXIOM_METRICS_DATASET=audetic-ism-metrics
+# AXIOM_ORG_ID=...          # only if AXIOM_TOKEN is a personal (xapt-) token
+# AXIOM_URL=https://api.eu.axiom.co   # only for the EU region
+# OTEL_METRIC_EXPORT_INTERVAL=60000
+
 # Ensure ffmpeg and bun are available to the service
 # PATH=/usr/local/bin:/usr/bin:/bin
 `;

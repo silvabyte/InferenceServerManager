@@ -49,8 +49,8 @@ const cleanup = async () => {
 		DB.close();
 	}, "Failed to close database");
 
-	// Flush and shut down metrics
-	WithTry(async () => Metrics.shutdown(), "Failed to shut down metrics");
+	// Flush and shut down metrics (await so the final export goes out)
+	await WithTry(async () => Metrics.shutdown(), "Failed to shut down metrics");
 
 	if (app?.server) {
 		try {
@@ -62,6 +62,9 @@ const cleanup = async () => {
 	}
 
 	Log.info("Inference Server Manager shutdown complete");
+
+	// Flush buffered logs last (pino + Axiom) so shutdown lines are delivered.
+	await WithTry(async () => Log.shutdown(), "Failed to flush logs");
 };
 
 const registerShutdown = () => {
