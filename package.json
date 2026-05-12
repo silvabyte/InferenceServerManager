@@ -11,7 +11,11 @@
 		"typecheck": "tsc --noEmit",
 		"fmt": "bunx biome format --write",
 		"lint": "bunx biome lint --write",
-		"check": "bunx biome check --write --unsafe"
+		"check": "bunx biome check --write --unsafe",
+		"secrets:init": "bash scripts/secrets-init.sh",
+		"secrets": "bun scripts/secrets.ts all",
+		"secrets:local": "bun scripts/secrets.ts local",
+		"secrets:prod": "bun scripts/secrets.ts prod"
 	},
 	"dependencies": {
 		"@axiomhq/js": "^1.6.1",

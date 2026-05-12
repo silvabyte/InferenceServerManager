@@ -139,3 +139,18 @@ For example: `bd create --help` shows `--parent`, `--deps`, `--assignee`, etc.
 - ❌ Do NOT clutter repo root with planning documents
 
 For more details, see README.md and QUICKSTART.md.
+
+## Secrets
+
+All secrets live in Bitwarden under the `audetic/` namespace, pulled into env
+files via `bun run secrets:*` (`scripts/secrets.ts`, on top of `scripts/lib/bw.ts`
+— the `bw` CLI with `~/.bw_password` / `~/.bw_session`). Same strategy as
+`silvabyte/weekendgarden`.
+
+- `bun run secrets:local` → writes `./.env` from `audetic/ism-env-local`
+- `bun run secrets:prod`  → writes `~/.config/transcription_manager/env` from `audetic/ism-env-prod`
+- `bun run secrets:init`  → one-time vault seeding (`scripts/secrets-init.sh`)
+
+Bitwarden is the source of truth — generated env files carry a "do not edit"
+header. Never commit `.env`. Never paste secret values into chat, logs, or
+issue text.

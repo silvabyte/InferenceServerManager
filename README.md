@@ -256,6 +256,23 @@ Config file location: `~/.config/transcription_manager/settings.json5` (or custo
 }
 ```
 
+## Secrets (Bitwarden)
+
+Env values live in Bitwarden under the `audetic/` namespace and are pulled into
+env files with `bun run secrets:*` (powered by the `bw` CLI; same flow as
+`~/.bw_password` / `~/.bw_session`). Generated env files carry a "do not edit"
+header — Bitwarden is the source of truth.
+
+| Command                 | Pulls                  | Writes                                          |
+| ----------------------- | ---------------------- | ----------------------------------------------- |
+| `bun run secrets:init`  | —                      | one-time: creates the `audetic` folder + items  |
+| `bun run secrets:local` | `audetic/ism-env-local`| `./.env` (local dev — Bun auto-loads it)        |
+| `bun run secrets:prod`  | `audetic/ism-env-prod` | `~/.config/transcription_manager/env` (systemd) |
+| `bun run secrets`       | `audetic/ism-env-local`| alias for `secrets:local`                       |
+
+Pass `--debug` for verbose logging (e.g. `bun scripts/secrets.ts local --debug`).
+Never commit `.env` files; never paste secret values into chat or logs.
+
 ## API Endpoints
 
 ### Health Check
